@@ -101,7 +101,10 @@ export async function getUserLeads() {
 
 export async function getAllLeads() {
   const cookieStore = await cookies();
-  const isAdmin = cookieStore.get("admin_access")?.value === process.env.ADMIN_SECRET;
+  const adminSecret = process.env.ADMIN_SECRET;
+  const adminCookie = cookieStore.get("admin_access")?.value;
+  
+  const isAdmin = adminSecret && adminCookie === adminSecret;
   
   if (!isAdmin) {
     throw new Error("Unauthorized");
@@ -119,14 +122,15 @@ export async function adminLogin(formData: FormData) {
   }
 
   const { secret } = validated.data;
+  const adminSecret = process.env.ADMIN_SECRET;
   
-  if (secret === process.env.ADMIN_SECRET) {
+  if (adminSecret && secret === adminSecret) {
     const cookieStore = await cookies();
     cookieStore.set("admin_access", secret, { 
       path: "/", 
       maxAge: 60 * 60 * 24,
       httpOnly: true,
-      secure: true, // Always true for security
+      secure: process.env.NODE_ENV === "production",
       sameSite: "strict"
     });
     return { success: true };
@@ -149,9 +153,12 @@ export async function updateLeadStatus(id: number, status: string, response: str
 
 export async function deleteLead(id: number) {
   const cookieStore = await cookies();
-  const isAdmin = cookieStore.get("admin_access")?.value === process.env.ADMIN_SECRET;
+  const adminSecret = process.env.ADMIN_SECRET;
+  const adminCookie = cookieStore.get("admin_access")?.value;
   
-  if (!isAdmin && process.env.NODE_ENV === "production") {
+  const isAdmin = adminSecret && adminCookie === adminSecret;
+  
+  if (!isAdmin) {
     throw new Error("Unauthorized");
   }
 
