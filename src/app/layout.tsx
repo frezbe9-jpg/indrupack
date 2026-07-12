@@ -4,8 +4,30 @@ import "./globals.css";
 
 
 export const metadata: Metadata = {
-  title: "Индивидуальные Решения Упаковки | Гофроупаковка под заказ",
-  description: "Производство гофроупаковки и картонных коробок от 1000 кв. м. Высокое качество, быстрая доставка.",
+  title: {
+    default: "Индивидуальные Решения Упаковки | Гофроупаковка под заказ",
+    template: "%s | ИРУ"
+  },
+  description: "Производство и поставка гофроупаковки и картонных коробок от 1000 кв. м. Разработка индивидуальных конструкций FEFCO, флексопечать, доставка по РФ.",
+  keywords: ["гофроупаковка", "картонные коробки", "FEFCO", "гофрокартон", "производство упаковки"],
+  openGraph: {
+    title: "Индивидуальные Решения Упаковки",
+    description: "Надежная упаковка для вашего бизнеса под заказ.",
+    type: "website",
+    locale: "ru_RU",
+    url: "https://iru-pack.ru",
+    siteName: "ИРУ",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

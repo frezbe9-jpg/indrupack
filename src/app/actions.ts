@@ -4,35 +4,36 @@
 import { db } from "@/db";
 import { leads } from "@/db/schema";
 import { revalidatePath } from "next/cache";
-import { eq, and, or } from "drizzle-orm";
+import { eq, or, desc } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { leadSchema, loginSchema, adminLoginSchema } from "@/lib/validations";
 
 export async function submitLead(formData: FormData) {
-  const name = formData.get("name") as string;
-  const phone = formData.get("phone") as string;
-  const email = formData.get("email") as string;
-  const message = formData.get("message") as string;
-  const squareMeters = parseInt(formData.get("squareMeters") as string) || 0;
-  const quizResults = formData.get("quizResults") as string;
-  const fefcoCode = formData.get("fefcoCode") as string;
+  const rawData = Object.fromEntries(formData.entries());
+  const validated = leadSchema.safeParse(rawData);
 
-  if (!name || !phone) {
-    return { error: "Имя и телефон обязательны для заполнения" };
+  if (!validated.success) {
+    return { error: validated.error.issues[0].message };
   }
 
-  try {
-    const [inserted] = await db.insert(leads).values({
-      name,
-      phone,
-      email,
-      message,
-      squareMeters,
-      quizResults,
-      fefcoCode,
-    }).returning();
+  const data = validated.data;
 
-    // Trigger Telegram (async, don't block response)
-    const tgMessage = `🚀 <b>Новая заявка!</b>\n\n👤 Имя: ${name}\n📞 Тел: ${phone}\n📧 Email: ${email || "не указан"}\n📦 Объем: ${squareMeters} кв. м\n💬 Сообщение: ${message || "-"}`;
+  try {
+    await db.insert(leads).values({
+      name: data.name,
+      phone: data.phone,
+      email: data.email || null,
+      message: data.message || null,
+      length: data.length,
+      width: data.width,
+      height: data.height,
+      quantity: data.quantity,
+      cardboardGrade: data.cardboardGrade || null,
+      quizResults: data.quizResults || null,
+      fefcoCode: data.fefcoCode || null,
+    });
+
+    const tgMessage = `🚀 <b>Новая заявка!</b>\n\n👤 Имя: ${data.name}\n📞 Тел: ${data.phone}\n📦 Тираж: ${data.quantity} шт.\n📐 Размеры: ${data.length}x${data.width}x${data.height} мм\n📄 Марка: ${data.cardboardGrade || 'не указана'}\n💬 Сообщение: ${data.message || "-"}`;
     sendTelegramNotification(tgMessage).catch(console.error);
 
     revalidatePath("/");
@@ -41,18 +42,20 @@ export async function submitLead(formData: FormData) {
     return { success: "Заявка успешно отправлена! Мы свяжемся с вами в ближайшее время." };
   } catch (error) {
     console.error("Error submitting lead:", error);
-    return { error: "Произошла ошибка при отправке заявки. Пожалуйста, попробуйте позже." };
+    return { error: "Серверная ошибка. Пожалуйста, попробуйте позже." };
   }
 }
 
 export async function loginUser(formData: FormData) {
-  const identifier = formData.get("identifier") as string; // email or phone
+  const rawData = Object.fromEntries(formData.entries());
+  const validated = loginSchema.safeParse(rawData);
 
-  if (!identifier) {
-    return { error: "Введите Email или Телефон" };
+  if (!validated.success) {
+    return { error: validated.error.issues[0].message };
   }
 
-  // Check if any lead exists with this identifier
+  const { identifier } = validated.data;
+
   const existingLeads = await db.select().from(leads).where(
     or(
       eq(leads.email, identifier),
@@ -67,9 +70,10 @@ export async function loginUser(formData: FormData) {
   const cookieStore = await cookies();
   cookieStore.set("user_identifier", identifier, { 
     path: "/", 
-    maxAge: 60 * 60 * 24 * 7, // 1 week
+    maxAge: 60 * 60 * 24 * 7,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production"
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax"
   });
 
   return { success: true };
@@ -92,30 +96,38 @@ export async function getUserLeads() {
       eq(leads.email, identifier),
       eq(leads.phone, identifier)
     )
-  ).orderBy(leads.createdAt);
+  ).orderBy(desc(leads.createdAt));
 }
 
 export async function getAllLeads() {
   const cookieStore = await cookies();
   const isAdmin = cookieStore.get("admin_access")?.value === process.env.ADMIN_SECRET;
   
-  if (!isAdmin && process.env.NODE_ENV === "production") {
+  if (!isAdmin) {
     throw new Error("Unauthorized");
   }
 
-  return await db.select().from(leads).orderBy(leads.createdAt);
+  return await db.select().from(leads).orderBy(desc(leads.createdAt));
 }
 
 export async function adminLogin(formData: FormData) {
-  const secret = formData.get("secret") as string;
+  const rawData = Object.fromEntries(formData.entries());
+  const validated = adminLoginSchema.safeParse(rawData);
+
+  if (!validated.success) {
+    return { error: validated.error.issues[0].message };
+  }
+
+  const { secret } = validated.data;
   
   if (secret === process.env.ADMIN_SECRET) {
     const cookieStore = await cookies();
     cookieStore.set("admin_access", secret, { 
       path: "/", 
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production"
+      secure: true, // Always true for security
+      sameSite: "strict"
     });
     return { success: true };
   }
@@ -123,23 +135,37 @@ export async function adminLogin(formData: FormData) {
   return { error: "Неверный код доступа" };
 }
 
-
 export async function updateLeadStatus(id: number, status: string, response: string) {
   await db.update(leads)
-    .set({ status, response })
+    .set({ 
+      status, 
+      response,
+      updatedAt: new Date()
+    })
     .where(eq(leads.id, id));
   revalidatePath("/admin");
   revalidatePath("/dashboard");
 }
 
+export async function deleteLead(id: number) {
+  const cookieStore = await cookies();
+  const isAdmin = cookieStore.get("admin_access")?.value === process.env.ADMIN_SECRET;
+  
+  if (!isAdmin && process.env.NODE_ENV === "production") {
+    throw new Error("Unauthorized");
+  }
+
+  await db.delete(leads).where(eq(leads.id, id));
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+}
+
+
 export async function sendTelegramNotification(message: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  if (!botToken || !chatId) {
-    console.warn("Telegram credentials not found, skipping notification");
-    return;
-  }
+  if (!botToken || !chatId) return;
 
   try {
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -151,5 +177,3 @@ export async function sendTelegramNotification(message: string) {
     console.error("Telegram notification error:", error);
   }
 }
-
-

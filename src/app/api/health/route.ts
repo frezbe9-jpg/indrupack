@@ -5,9 +5,18 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await db.execute(sql`select 1`);
-    return Response.json({ ok: true });
-  } catch {
-    return Response.json({ ok: false }, { status: 500 });
+    await db.execute(sql`SELECT 1`);
+    return Response.json({ 
+      status: "ok", 
+      database: "connected",
+      timestamp: new Date().toISOString() 
+    });
+  } catch (error) {
+    console.error("Health check failed:", error);
+    return Response.json({ 
+      status: "error", 
+      database: "disconnected",
+      timestamp: new Date().toISOString() 
+    }, { status: 503 });
   }
 }

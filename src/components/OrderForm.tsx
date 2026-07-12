@@ -91,22 +91,52 @@ export default function OrderForm() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Объем заказа (кв. м) *</label>
-                <Input
-                  name="squareMeters"
-                  type="number"
-                  min="1000"
-                  defaultValue="1000"
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Длина (мм) *</label>
+                  <Input name="length" type="number" required placeholder="300" />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Ширина (мм) *</label>
+                  <Input name="width" type="number" required placeholder="200" />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Высота (мм) *</label>
+                  <Input name="height" type="number" required placeholder="150" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Тираж (шт.) *</label>
+                  <Input
+                    name="quantity"
+                    type="number"
+                    min="10"
+                    defaultValue="1000"
+                    required
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Марка картона</label>
+                  <select 
+                    name="cardboardGrade"
+                    className="flex h-16 w-full rounded-3xl border border-white/10 bg-white/[0.03] px-8 text-base text-white outline-none focus:ring-2 focus:ring-orange-500/50 appearance-none cursor-pointer transition-all"
+                  >
+                    <option value="Т-21" className="bg-gray-900">Т-21 (Эконом)</option>
+                    <option value="Т-22" className="bg-gray-900">Т-22 (Стандарт)</option>
+                    <option value="Т-23" className="bg-gray-900" selected>Т-23 (Усиленный)</option>
+                    <option value="Т-24" className="bg-gray-900">Т-24 (Премиум)</option>
+                    <option value="П-32" className="bg-gray-900">П-32 (Пятислойный)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Сообщение</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">Дополнительно</label>
                 <Textarea
                   name="message"
-                  placeholder="Опишите ваши требования к упаковке..."
+                  placeholder="Укажите код FEFCO (если знаете) или другие пожелания..."
                 />
               </div>
 

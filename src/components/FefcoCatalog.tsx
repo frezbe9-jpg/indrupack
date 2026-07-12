@@ -6,12 +6,12 @@ import { StaggerContainer, StaggerItem } from "./Animations";
 import { Package, ArrowUpRight } from "lucide-react";
 
 const fefcoStandards = [
-  { code: "0201", title: "Стандартный короб", desc: "Самый популярный тип: клапаны встык.", img: "📦" },
-  { code: "0427", title: "Самосборный короб", desc: "Короб с «ушками», не требует скотча.", img: "🍱" },
-  { code: "0203", title: "Короб с перекрытием", desc: "Клапаны полностью перекрывают друг друга.", img: "📥" },
-  { code: "0300", title: "Телескопический", desc: "Состоит из двух частей: крышки и дна.", img: "📦" },
-  { code: "0421", title: "Короб с замком", desc: "Усиленные боковые стенки, высокая прочность.", img: "🎁" },
-  { code: "0701", title: "Авто-дно", desc: "Мгновенная сборка за счет склейки дна.", img: "🚀" }
+  { code: "0201", title: "Стандартный короб", desc: "Самый популярный тип: клапаны встык.", icon: "M3 8L12 3L21 8V16L12 21L3 16V8ZM12 3V12M12 12L21 8M12 12L3 8" },
+  { code: "0427", title: "Самосборный короб", desc: "Короб с «ушками», не требует скотча.", icon: "M21 8V16L12 21L3 16V8L12 3L21 8ZM12 21V12M12 12L3 8M12 12L21 8M21 8L12 13L3 8" },
+  { code: "0203", title: "Короб с перекрытием", desc: "Клапаны полностью перекрывают друг друга.", icon: "M12 3L3 8V16L12 21L21 16V8L12 3ZM3 8L12 13L21 8M12 13V21" },
+  { code: "0300", title: "Телескопический", desc: "Состоит из двух частей: крышки и дна.", icon: "M21 8L12 3L3 8L12 13L21 8ZM21 16L12 21L3 16M21 12L12 17L3 12" },
+  { code: "0421", title: "Короб с замком", desc: "Усиленные боковые стенки, высокая прочность.", icon: "M12 3L21 8V16L12 21L3 16V8L12 3ZM3 8L12 13M21 8L12 13M12 13V21M7 6L17 10" },
+  { code: "0701", title: "Авто-дно", desc: "Мгновенная сборка за счет склейки дна.", icon: "M12 2L3 7V17L12 22L21 17V7L12 2ZM12 22V12M12 12L3 7M12 12L21 7M5 18L12 12L19 18" }
 ];
 
 export default function FefcoCatalog() {
@@ -38,7 +38,19 @@ export default function FefcoCatalog() {
                     </span>
                     <ArrowUpRight className="w-5 h-5 text-gray-700 group-hover:text-orange-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
                   </div>
-                  <div className="text-5xl mb-6">{item.img}</div>
+                  <div className="w-16 h-16 bg-white/[0.03] border border-white/10 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-orange-600/20 group-hover:border-orange-500/50 transition-all duration-500">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-8 h-8 text-orange-500"
+                    >
+                      <path d={item.icon} />
+                    </svg>
+                  </div>
                   <h4 className="text-xl font-black text-white uppercase mb-2 tracking-tight">
                     {item.title}
                   </h4>
