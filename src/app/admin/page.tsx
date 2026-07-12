@@ -1,11 +1,11 @@
-import { getAllLeads } from "@/app/actions";
+import { getAllLeads, adminLogout } from "@/app/actions";
 import Navbar from "@/components/Navigation";
 import AdminLeadRow from "@/components/AdminLeadRow";
 import AdminLogin from "@/components/AdminLogin";
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/Animations";
 import { cookies } from "next/headers";
-import { Card, CardContent } from "@/components/ui-core";
-import { LayoutDashboard, Inbox, Activity, CheckCircle2 } from "lucide-react";
+import { Card, CardContent, Button } from "@/components/ui-core";
+import { LayoutDashboard, Inbox, Activity, CheckCircle2, LogOut } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,14 @@ export default async function AdminPage() {
               <h1 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
                 Control <span className="text-orange-600">Center</span>
               </h1>
-              <p className="text-gray-400 font-medium">Система управления заказами и взаимодействием с клиентами.</p>
+              <div className="flex flex-wrap items-center gap-4 mt-2">
+                <p className="text-gray-400 font-medium">Система управления заказами.</p>
+                <form action={adminLogout}>
+                  <button type="submit" className="text-[10px] font-black uppercase text-orange-600 hover:text-white transition-colors flex items-center gap-1">
+                    <LogOut className="w-3 h-3" /> Завершить сессию
+                  </button>
+                </form>
+              </div>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full">
                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />

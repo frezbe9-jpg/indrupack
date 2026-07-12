@@ -126,9 +126,9 @@ export async function adminLogin(formData: FormData) {
   
   if (adminSecret && secret === adminSecret) {
     const cookieStore = await cookies();
+    // Removing maxAge makes it a Session Cookie (deleted when browser closes)
     cookieStore.set("admin_access", secret, { 
       path: "/", 
-      maxAge: 60 * 60 * 24,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict"
@@ -137,6 +137,12 @@ export async function adminLogin(formData: FormData) {
   }
   
   return { error: "Неверный код доступа" };
+}
+
+export async function adminLogout() {
+  const cookieStore = await cookies();
+  cookieStore.delete("admin_access");
+  revalidatePath("/admin");
 }
 
 export async function updateLeadStatus(id: number, status: string, response: string) {
