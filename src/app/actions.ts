@@ -2,191 +2,131 @@
 "use server";
 
 import { db } from "@/db";
-import { leads } from "@/db/schema";
+import { leads, auditLogs } from "@/db/schema";
 import { revalidatePath } from "next/cache";
 import { eq, or, desc } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { leadSchema, loginSchema, adminLoginSchema } from "@/lib/validations";
 
+// --- Middleware Helpers ---
+async function verifyAdmin() {
+  const cookieStore = await cookies();
+  const adminSecret = process.env.ADMIN_SECRET;
+  const adminCookie = cookieStore.get("admin_access")?.value;
+  const isAdmin = adminSecret && adminCookie === adminSecret;
+  if (!isAdmin) throw new Error("Unauthorized");
+  return adminCookie;
+}
+
+async function logAction(action: string, entityId?: number, details?: string) {
+  const adminId = (await cookies()).get("admin_access")?.value || "system";
+  await db.insert(auditLogs).values({ action, entityId, details, adminId });
+}
+
+// --- Public Actions ---
 export async function submitLead(formData: FormData) {
   const rawData = Object.fromEntries(formData.entries());
   const validated = leadSchema.safeParse(rawData);
 
-  if (!validated.success) {
-    return { error: validated.error.issues[0].message };
-  }
-
-  const data = validated.data;
+  if (!validated.success) return { error: validated.error.issues[0].message };
 
   try {
-    await db.insert(leads).values({
-      name: data.name,
-      phone: data.phone,
-      email: data.email || null,
-      message: data.message || null,
-      length: data.length,
-      width: data.width,
-      height: data.height,
-      quantity: data.quantity,
-      cardboardGrade: data.cardboardGrade || null,
-      quizResults: data.quizResults || null,
-      fefcoCode: data.fefcoCode || null,
-    });
+    const [inserted] = await db.insert(leads).values({
+      ...validated.data,
+      email: validated.data.email || null,
+      message: validated.data.message || null,
+      cardboardGrade: validated.data.cardboardGrade || null,
+      quizResults: validated.data.quizResults || null,
+      fefcoCode: validated.data.fefcoCode || null,
+    }).returning();
 
-    const tgMessage = `🚀 <b>Новая заявка!</b>\n\n👤 Имя: ${data.name}\n📞 Тел: ${data.phone}\n📦 Тираж: ${data.quantity} шт.\n📐 Размеры: ${data.length}x${data.width}x${data.height} мм\n📄 Марка: ${data.cardboardGrade || 'не указана'}\n💬 Сообщение: ${data.message || "-"}`;
+    const tgMessage = `🚀 <b>Новая заявка!</b>\n\n👤 Имя: ${inserted.name}\n📞 Тел: ${inserted.phone}\n📦 Тираж: ${inserted.quantity} шт.`;
     sendTelegramNotification(tgMessage).catch(console.error);
 
     revalidatePath("/");
-    revalidatePath("/dashboard");
-    revalidatePath("/admin");
-    return { success: "Заявка успешно отправлена! Мы свяжемся с вами в ближайшее время." };
+    return { success: "Заявка успешно отправлена!" };
   } catch (error) {
-    console.error("Error submitting lead:", error);
-    return { error: "Серверная ошибка. Пожалуйста, попробуйте позже." };
+    console.error("Submit error:", error);
+    return { error: "Ошибка сервера" };
   }
 }
 
-export async function loginUser(formData: FormData) {
-  const rawData = Object.fromEntries(formData.entries());
-  const validated = loginSchema.safeParse(rawData);
-
-  if (!validated.success) {
-    return { error: validated.error.issues[0].message };
-  }
-
-  const { identifier } = validated.data;
-
-  const existingLeads = await db.select().from(leads).where(
-    or(
-      eq(leads.email, identifier),
-      eq(leads.phone, identifier)
-    )
-  ).limit(1);
-
-  if (existingLeads.length === 0) {
-    return { error: "Заявок с такими данными не найдено" };
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.set("user_identifier", identifier, { 
-    path: "/", 
-    maxAge: 60 * 60 * 24 * 7,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax"
-  });
-
-  return { success: true };
-}
-
-export async function logoutUser() {
-  const cookieStore = await cookies();
-  cookieStore.delete("user_identifier");
-  revalidatePath("/");
-}
-
-export async function getUserLeads() {
-  const cookieStore = await cookies();
-  const identifier = cookieStore.get("user_identifier")?.value;
-
-  if (!identifier) return null;
-
-  return await db.select().from(leads).where(
-    or(
-      eq(leads.email, identifier),
-      eq(leads.phone, identifier)
-    )
-  ).orderBy(desc(leads.createdAt));
-}
-
-export async function getAllLeads() {
-  const cookieStore = await cookies();
-  const adminSecret = process.env.ADMIN_SECRET;
-  const adminCookie = cookieStore.get("admin_access")?.value;
-  
-  const isAdmin = adminSecret && adminCookie === adminSecret;
-  
-  if (!isAdmin) {
-    throw new Error("Unauthorized");
-  }
-
-  return await db.select().from(leads).orderBy(desc(leads.createdAt));
-}
-
+// --- Admin Actions ---
 export async function adminLogin(formData: FormData) {
-  const rawData = Object.fromEntries(formData.entries());
-  const validated = adminLoginSchema.safeParse(rawData);
+  const validated = adminLoginSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!validated.success) return { error: validated.error.issues[0].message };
 
-  if (!validated.success) {
-    return { error: validated.error.issues[0].message };
-  }
-
-  const { secret } = validated.data;
   const adminSecret = process.env.ADMIN_SECRET;
-  
-  if (adminSecret && secret === adminSecret) {
+  if (adminSecret && validated.data.secret === adminSecret) {
     const cookieStore = await cookies();
-    // Removing maxAge makes it a Session Cookie (deleted when browser closes)
-    cookieStore.set("admin_access", secret, { 
+    cookieStore.set("admin_access", adminSecret, { 
       path: "/", 
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict"
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === "production", 
+      sameSite: "strict" 
     });
+    await logAction("ADMIN_LOGIN", undefined, "Успешный вход в систему");
     return { success: true };
   }
-  
-  return { error: "Неверный код доступа" };
+  return { error: "Доступ запрещен" };
 }
 
 export async function adminLogout() {
-  const cookieStore = await cookies();
-  cookieStore.delete("admin_access");
-  revalidatePath("/admin");
+  await logAction("ADMIN_LOGOUT");
+  (await cookies()).delete("admin_access");
+}
+
+export async function getAllLeads() {
+  await verifyAdmin();
+  return await db.select().from(leads).orderBy(desc(leads.createdAt));
 }
 
 export async function updateLeadStatus(id: number, status: string, response: string) {
-  await db.update(leads)
-    .set({ 
-      status, 
-      response,
-      updatedAt: new Date()
-    })
-    .where(eq(leads.id, id));
+  await verifyAdmin();
+  await db.update(leads).set({ status, response, updatedAt: new Date() }).where(eq(leads.id, id));
+  await logAction("UPDATE_LEAD", id, `Статус: ${status}`);
   revalidatePath("/admin");
   revalidatePath("/dashboard");
 }
 
 export async function deleteLead(id: number) {
-  const cookieStore = await cookies();
-  const adminSecret = process.env.ADMIN_SECRET;
-  const adminCookie = cookieStore.get("admin_access")?.value;
-  
-  const isAdmin = adminSecret && adminCookie === adminSecret;
-  
-  if (!isAdmin) {
-    throw new Error("Unauthorized");
-  }
-
+  await verifyAdmin();
   await db.delete(leads).where(eq(leads.id, id));
+  await logAction("DELETE_LEAD", id);
   revalidatePath("/admin");
-  revalidatePath("/dashboard");
 }
 
+// --- Client Dashboard Actions ---
+export async function loginUser(formData: FormData) {
+  const validated = loginSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!validated.success) return { error: validated.error.issues[0].message };
 
+  const user = await db.select().from(leads).where(or(eq(leads.email, validated.data.identifier), eq(leads.phone, validated.data.identifier))).limit(1);
+  if (!user.length) return { error: "Заявок не найдено" };
+
+  (await cookies()).set("user_identifier", validated.data.identifier, { path: "/", maxAge: 60 * 60 * 24 * 7, httpOnly: true, sameSite: "lax" });
+  return { success: true };
+}
+
+export async function logoutUser() {
+  (await cookies()).delete("user_identifier");
+}
+
+export async function getUserLeads() {
+  const identifier = (await cookies()).get("user_identifier")?.value;
+  if (!identifier) return null;
+  return await db.select().from(leads).where(or(eq(leads.email, identifier), eq(leads.phone, identifier))).orderBy(desc(leads.createdAt));
+}
+
+// --- Integration ---
 export async function sendTelegramNotification(message: string) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  if (!botToken || !chatId) return;
-
+  const { TELEGRAM_BOT_TOKEN: token, TELEGRAM_CHAT_ID: chat } = process.env;
+  if (!token || !chat) return;
   try {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "HTML" }),
+      body: JSON.stringify({ chat_id: chat, text: message, parse_mode: "HTML" }),
     });
-  } catch (error) {
-    console.error("Telegram notification error:", error);
-  }
+  } catch (e) { console.error("TG Error:", e); }
 }
