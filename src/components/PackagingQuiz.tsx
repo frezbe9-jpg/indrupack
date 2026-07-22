@@ -1,152 +1,230 @@
-"use client";
-
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "./ui-core";
-import { ChevronRight, ChevronLeft, Package, Shield, Truck, Check, Loader2 } from "lucide-react";
-import { submitLead } from "@/app/actions";
+import { ChevronRight, CheckCircle2, RotateCcw, Package } from "lucide-react";
+import { cn } from "../utils/cn";
 
-interface Option {
-  label: string;
-  value: string;
-  icon?: any;
-}
+type Answers = {
+  product: string;
+  weight: string;
+  storage: string;
+  quantity: string;
+};
 
-interface Step {
-  id: string;
-  title: string;
-  options: Option[];
-}
-
-const steps: Step[] = [
+const questions = [
   {
     id: "product",
-    title: "Что вы упаковываете?",
+    question: "Что вы упаковываете?",
     options: [
-      { label: "Хрупкие товары", value: "fragile", icon: Shield },
-      { label: "Тяжелое оборудование", value: "heavy", icon: Package },
-      { label: "Продукты питания", value: "food", icon: Truck },
-      { label: "Мелкие товары", value: "small", icon: Package },
-    ]
+      { value: "food", label: "Продукты питания", emoji: "🍎" },
+      { value: "electronics", label: "Электроника", emoji: "📱" },
+      { value: "heavy", label: "Тяжёлые грузы", emoji: "⚙️" },
+      { value: "cosmetics", label: "Косметика/товары", emoji: "🧴" },
+    ],
+  },
+  {
+    id: "weight",
+    question: "Масса единицы товара?",
+    options: [
+      { value: "light", label: "До 1 кг", emoji: "🪶" },
+      { value: "medium", label: "1–5 кг", emoji: "📦" },
+      { value: "heavy", label: "5–20 кг", emoji: "🔩" },
+      { value: "very_heavy", label: "Свыше 20 кг", emoji: "🏗️" },
+    ],
   },
   {
     id: "storage",
-    title: "Условия хранения?",
+    question: "Условия хранения и транспортировки?",
     options: [
-      { label: "Сухой склад", value: "dry" },
-      { label: "Высокая влажность", value: "humid" },
-      { label: "Заморозка", value: "cold" },
-    ]
+      { value: "dry", label: "Сухой склад", emoji: "🏬" },
+      { value: "humid", label: "Влажная среда", emoji: "💧" },
+      { value: "outdoor", label: "Уличные условия", emoji: "🌧️" },
+      { value: "refrigerated", label: "Холодильник", emoji: "❄️" },
+    ],
   },
   {
-    id: "printing",
-    title: "Нужна ли печать?",
+    id: "quantity",
+    question: "Планируемый тираж?",
     options: [
-      { label: "Без печати", value: "no_print" },
-      { label: "В 1-2 цвета", value: "1_2_colors" },
-      { label: "Полноцветная", value: "full_color" },
-    ]
-  }
+      { value: "small", label: "1 000 – 5 000 шт", emoji: "📋" },
+      { value: "medium", label: "5 000 – 20 000 шт", emoji: "📊" },
+      { value: "large", label: "20 000 – 100 000 шт", emoji: "🏭" },
+      { value: "xlarge", label: "Свыше 100 000 шт", emoji: "🚀" },
+    ],
+  },
 ];
 
+function getRecommendation(answers: Answers) {
+  const isHeavy = answers.product === "heavy" || answers.weight === "very_heavy";
+  const isWet = answers.storage === "humid" || answers.storage === "outdoor";
+  const isBig = answers.quantity === "large" || answers.quantity === "xlarge";
+
+  if (isHeavy && isWet) {
+    return {
+      fefco: "0203",
+      grade: "П-32 (пятислойный)",
+      desc: "Максимальная прочность и влагостойкость. Идеал для тяжёлых грузов во влажных условиях.",
+      color: "from-red-600 to-orange-600",
+    };
+  } else if (isHeavy) {
+    return {
+      fefco: "0201",
+      grade: "Т-24 (трёхслойный усиленный)",
+      desc: "Высокая прочность на сжатие. Надёжная защита тяжёлых и габаритных изделий.",
+      color: "from-orange-600 to-amber-500",
+    };
+  } else if (isBig) {
+    return {
+      fefco: "0701",
+      grade: "Т-23 (трёхслойный)",
+      desc: "Автоматическое дно для скоростных линий упаковки. Выгодно при больших тиражах.",
+      color: "from-blue-600 to-cyan-500",
+    };
+  } else {
+    return {
+      fefco: "0427",
+      grade: "Т-21 (трёхслойный)",
+      desc: "Самосборная конструкция — оптимальный выбор по соотношению цены и качества.",
+      color: "from-green-600 to-emerald-500",
+    };
+  }
+}
+
 export default function PackagingQuiz() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [isFinished, setIsFinished] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<Partial<Answers>>({});
+  const [done, setDone] = useState(false);
+
+  const currentQ = questions[step];
 
   const handleSelect = (value: string) => {
-    const stepId = steps[currentStep].id;
-    setAnswers({ ...answers, [stepId]: value });
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+    const newAnswers = { ...answers, [currentQ.id]: value };
+    setAnswers(newAnswers);
+
+    if (step < questions.length - 1) {
+      setTimeout(() => setStep(step + 1), 300);
     } else {
-      setIsFinished(true);
+      setTimeout(() => setDone(true), 300);
     }
   };
 
-  const handleContactSubmit = async (formData: FormData) => {
-    setLoading(true);
-    const quizSummary = JSON.stringify(answers);
-    formData.append("quizResults", quizSummary);
-    await submitLead(formData);
-    setLoading(false);
-    alert("Заявка с результатами теста отправлена!");
-    window.location.reload();
+  const reset = () => {
+    setStep(0);
+    setAnswers({});
+    setDone(false);
   };
 
-  return (
-    <Card className="p-0 border-white/5 bg-white/[0.02] backdrop-blur-3xl shadow-[0_64px_128px_-32px_rgba(0,0,0,0.6)]">
-      <CardHeader className="p-10 pb-0">
-        <CardTitle className="text-3xl font-black uppercase tracking-tighter leading-none text-white">
-          {!isFinished ? `Подбор ${currentStep + 1}/${steps.length}` : "Результат"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-10 pt-8">
-        <AnimatePresence mode="wait">
-          {!isFinished ? (
-            <motion.div
-              key={currentStep}
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="space-y-8"
-            >
-              <h3 className="text-2xl font-black text-white uppercase tracking-tight leading-tight">{steps[currentStep].title}</h3>
-              <div className="grid grid-cols-1 gap-4">
-                {steps[currentStep].options.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => handleSelect(option.value)}
-                    className="flex items-center gap-6 p-8 rounded-[32px] bg-white/[0.03] border border-white/5 hover:border-orange-500/50 hover:bg-white/[0.06] transition-all duration-500 text-left group"
-                  >
-                    <div className="w-14 h-14 rounded-2xl bg-orange-600/10 flex items-center justify-center group-hover:bg-orange-600 transition-colors duration-500">
-                      {option.icon ? <option.icon className="w-7 h-7 text-orange-500 group-hover:text-white transition-colors duration-500" /> : <div className="w-3 h-3 rounded-full bg-orange-500 group-hover:bg-white" />}
-                    </div>
-                    <span className="text-lg font-bold text-gray-300 group-hover:text-white transition-colors duration-500">{option.label}</span>
-                  </button>
-                ))}
-              </div>
-              {currentStep > 0 && (
-                <button
-                  onClick={() => setCurrentStep(currentStep - 1)}
-                  className="flex items-center text-xs font-black uppercase tracking-[0.2em] text-gray-500 hover:text-orange-500 transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-2" /> Назад
-                </button>
-              )}
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="space-y-10"
-            >
-              <div className="p-8 bg-orange-600 rounded-[40px] shadow-2xl shadow-orange-600/20 relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-50" />
-                <h4 className="relative z-10 text-white font-black uppercase tracking-[0.3em] text-[10px] mb-4">Рекомендация эксперта</h4>
-                <p className="relative z-10 text-2xl font-black text-white leading-tight uppercase tracking-tight">
-                  {answers.product === "heavy" || answers.storage === "humid" 
-                    ? "Пятислойный картон марки П-32 для максимальной защиты."
-                    : "Трехслойный картон марки Т-23 — оптимальный выбор."}
-                </p>
-              </div>
+  const result = done ? getRecommendation(answers as Answers) : null;
 
-              <form action={handleContactSubmit} className="space-y-6">
-                <div className="space-y-4">
-                   <Input name="name" placeholder="Ваше имя" required />
-                   <Input name="phone" placeholder="Телефон" required />
-                </div>
-                <Button type="submit" disabled={loading} size="xl" className="w-full h-24">
-                  {loading ? <Loader2 className="animate-spin h-8 w-8" /> : "Получить расчет"}
-                </Button>
-              </form>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </CardContent>
-    </Card>
+  return (
+    <div className="rounded-3xl border border-white/10 bg-gray-900/80 backdrop-blur-xl p-8 shadow-2xl">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 rounded-2xl bg-orange-600 flex items-center justify-center">
+          <Package className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <p className="text-white font-black text-sm uppercase tracking-widest">Подбор упаковки</p>
+          <p className="text-gray-500 text-xs font-medium">Ответьте на 4 вопроса</p>
+        </div>
+        {!done && (
+          <div className="ml-auto text-orange-600 font-black text-2xl tracking-tighter">
+            {step + 1}/{questions.length}
+          </div>
+        )}
+      </div>
+
+      {/* Progress */}
+      {!done && (
+        <div className="flex gap-2 mb-8">
+          {questions.map((_, i) => (
+            <div
+              key={i}
+              className={cn(
+                "h-1 flex-1 rounded-full transition-all duration-500",
+                i <= step ? "bg-orange-600" : "bg-white/10"
+              )}
+            />
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {!done ? (
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h3 className="text-xl font-black text-white mb-6 leading-tight">
+              {currentQ.question}
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {currentQ.options.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleSelect(option.value)}
+                  className="flex flex-col items-start gap-2 p-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-orange-600/20 hover:border-orange-600/50 transition-all text-left active:scale-95 cursor-pointer group"
+                >
+                  <span className="text-2xl">{option.emoji}</span>
+                  <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors leading-tight">
+                    {option.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="result"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4 }}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <h3 className="text-xl font-black text-white">Рекомендация готова!</h3>
+            </div>
+
+            <div className={cn("rounded-2xl p-6 mb-6 bg-gradient-to-br", result?.color)}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-white/70 text-xs font-black uppercase tracking-widest">Конструкция</span>
+                <span className="text-white font-black text-3xl">FEFCO {result?.fefco}</span>
+              </div>
+              <p className="text-white font-black text-lg mb-1">{result?.grade}</p>
+              <p className="text-white/80 text-sm font-medium leading-relaxed">{result?.desc}</p>
+            </div>
+
+            <div className="bg-white/5 rounded-2xl p-4 mb-6">
+              <p className="text-orange-500 text-xs font-black uppercase tracking-widest mb-2">
+                Рекомендация эксперта
+              </p>
+              <p className="text-gray-300 text-sm font-medium leading-relaxed">
+                {(answers.product === "heavy" || answers.storage === "humid")
+                  ? "Пятислойный картон марки П-32 для максимальной защиты."
+                  : "Трёхслойный картон марки Т-23 — оптимальный выбор."}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={reset}
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all text-sm font-bold cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Начать заново
+              </button>
+              <a
+                href="#contact"
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-orange-600 text-white hover:bg-orange-700 transition-all text-sm font-black uppercase tracking-wider"
+              >
+                Оформить заявку
+                <ChevronRight className="w-4 h-4" />
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
