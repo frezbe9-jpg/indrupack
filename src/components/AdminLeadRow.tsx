@@ -5,7 +5,15 @@ import { updateLeadStatus, deleteLead } from "@/app/actions";
 import { Button, Textarea, Card } from "./ui-core";
 import { Loader2, Send, Phone, Mail, User, Package, Ruler, MessageSquare, Trash2 } from "lucide-react";
 
-export default function AdminLeadRow({ lead }: { lead: any }) {
+export default function AdminLeadRow({ 
+  lead, 
+  onUpdate, 
+  onDelete 
+}: { 
+  lead: any; 
+  onUpdate?: () => void; 
+  onDelete?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [response, setResponse] = useState(lead.response || "");
@@ -15,6 +23,7 @@ export default function AdminLeadRow({ lead }: { lead: any }) {
     setLoading(true);
     await updateLeadStatus(lead.id, status, response);
     setLoading(false);
+    if (onUpdate) onUpdate();
   };
 
   const handleDelete = async () => {
@@ -22,6 +31,7 @@ export default function AdminLeadRow({ lead }: { lead: any }) {
       setDeleteLoading(true);
       await deleteLead(lead.id);
       setDeleteLoading(false);
+      if (onDelete) onDelete();
     }
   };
 

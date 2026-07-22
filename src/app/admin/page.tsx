@@ -1,30 +1,157 @@
-import { getAllLeads, adminLogout } from "@/app/actions";
+"use client";
+
+import { useState, useEffect } from "react";
+import { adminLogin as adminLoginAction, getAllLeads, adminLogout } from "@/app/actions";
 import Navbar from "@/components/Navigation";
 import AdminLeadRow from "@/components/AdminLeadRow";
-import AdminLogin from "@/components/AdminLogin";
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/Animations";
-import { cookies } from "next/headers";
-import { Card, CardContent, Button } from "@/components/ui-core";
-import { LayoutDashboard, Inbox, Activity, CheckCircle2, LogOut } from "lucide-react";
+import { Card, Button, Input } from "@/components/ui-core";
+import { 
+  LayoutDashboard, Inbox, Activity, CheckCircle2, LogOut, 
+  Lock, Loader2, Shield 
+} from "lucide-react";
 
-export const dynamic = "force-dynamic";
+const SESSION_KEY = "iru_admin_session";
+const SESSION_MAX_AGE = 30 * 60 * 1000; // 30 минут
 
-export default async function AdminPage() {
-  const cookieStore = await cookies();
-  const adminSecret = process.env.ADMIN_SECRET;
-  const adminCookie = cookieStore.get("admin_access")?.value;
-  
-  const isAdmin = adminSecret && adminCookie === adminSecret;
+export default function AdminPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [leads, setLeads] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
 
-  if (!isAdmin) {
-    return <AdminLogin />;
+  // Проверка сессии при загрузке
+  useEffect(() => {
+    const session = sessionStorage.getItem(SESSION_KEY);
+    if (session) {
+      const parsed = JSON.parse(session);
+      const isExpired = Date.now() - parsed.timestamp > SESSION_MAX_AGE;
+      if (!isExpired) {
+        setIsAuthenticated(true);
+        loadLeads();
+      } else {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  const loadLeads = async () => {
+    setDataLoading(true);
+    try {
+      const data = await getAllLeads();
+      setLeads(data);
+    } catch (e) {
+      console.error(e);
+      // Если сервер вернул Unauthorized - разлогиниваем
+      setIsAuthenticated(false);
+      sessionStorage.removeItem(SESSION_KEY);
+    }
+    setDataLoading(false);
+  };
+
+  const handleLogin = async (formData: FormData) => {
+    setLoginLoading(true);
+    setError(null);
+    const result = await adminLoginAction(formData);
+    setLoginLoading(false);
+
+    if (result.success) {
+      // Сохраняем в sessionStorage (очищается при закрытии вкладки)
+      sessionStorage.setItem(
+        SESSION_KEY, 
+        JSON.stringify({ timestamp: Date.now() })
+      );
+      setIsAuthenticated(true);
+      loadLeads();
+    } else {
+      setError(result.error || "Ошибка входа");
+    }
+  };
+
+  const handleLogout = async () => {
+    await adminLogout();
+    sessionStorage.removeItem(SESSION_KEY);
+    setIsAuthenticated(false);
+    setLeads([]);
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+      </main>
+    );
   }
 
-  let leads: any[] = [];
-  try {
-    leads = await getAllLeads();
-  } catch (e) {
-    console.error(e);
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-gray-950 flex flex-col">
+        <Navbar />
+        <div className="flex-grow flex items-center justify-center px-6 py-20">
+          <FadeIn direction="up">
+            <Card className="max-w-md w-full border-white/10 bg-white/[0.02] backdrop-blur-3xl overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 to-red-600" />
+              <div className="p-12">
+                <div className="flex flex-col items-center mb-10">
+                  <div className="w-20 h-20 bg-orange-600/10 rounded-3xl flex items-center justify-center mb-6 border border-orange-600/20">
+                    <Shield className="w-10 h-10 text-orange-600" />
+                  </div>
+                  <h1 className="text-3xl font-black text-white uppercase tracking-tighter text-center leading-none">
+                    Контроль <br /><span className="text-orange-600">Доступа</span>
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-4 text-center font-medium">
+                    Введите код доступа для входа в систему управления.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-bold text-center">
+                    {error}
+                  </div>
+                )}
+
+                <form action={handleLogin} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 ml-2">
+                      Секретный код
+                    </label>
+                    <Input
+                      name="secret"
+                      type="password"
+                      placeholder="••••••••••••"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={loginLoading} 
+                    className="w-full h-16"
+                    size="lg"
+                  >
+                    {loginLoading ? (
+                      <Loader2 className="animate-spin w-6 h-6" />
+                    ) : (
+                      <>
+                        <Lock className="w-5 h-5 mr-2" />
+                        Войти в систему
+                      </>
+                    )}
+                  </Button>
+                </form>
+
+                <p className="text-[10px] text-gray-600 text-center mt-6 uppercase tracking-widest font-bold">
+                  Сессия истекает через 30 минут
+                </p>
+              </div>
+            </Card>
+          </FadeIn>
+        </div>
+      </main>
+    );
   }
 
   const stats = {
@@ -46,11 +173,12 @@ export default async function AdminPage() {
               </h1>
               <div className="flex flex-wrap items-center gap-4 mt-2">
                 <p className="text-gray-400 font-medium">Система управления заказами.</p>
-                <form action={adminLogout}>
-                  <button type="submit" className="text-[10px] font-black uppercase text-orange-600 hover:text-white transition-colors flex items-center gap-1">
-                    <LogOut className="w-3 h-3" /> Завершить сессию
-                  </button>
-                </form>
+                <button 
+                  onClick={handleLogout}
+                  className="text-[10px] font-black uppercase text-orange-600 hover:text-white transition-colors flex items-center gap-1"
+                >
+                  <LogOut className="w-3 h-3" /> Завершить сессию
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full">
@@ -60,7 +188,6 @@ export default async function AdminPage() {
           </div>
         </FadeIn>
 
-        {/* Stats Grid */}
         <StaggerContainer>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
             {[
@@ -82,7 +209,11 @@ export default async function AdminPage() {
           </div>
         </StaggerContainer>
 
-        {leads.length === 0 ? (
+        {dataLoading ? (
+          <div className="py-20 text-center">
+            <Loader2 className="w-10 h-10 text-orange-600 animate-spin mx-auto" />
+          </div>
+        ) : leads.length === 0 ? (
           <div className="py-20 text-center">
              <Inbox className="w-16 h-16 text-gray-800 mx-auto mb-6" />
              <p className="text-gray-500 text-xl font-bold uppercase tracking-widest">Входящих заявок нет</p>
@@ -98,7 +229,7 @@ export default async function AdminPage() {
               <div className="space-y-6">
                 {leads.map((lead) => (
                   <StaggerItem key={lead.id}>
-                    <AdminLeadRow lead={lead} />
+                    <AdminLeadRow lead={lead} onUpdate={loadLeads} onDelete={loadLeads} />
                   </StaggerItem>
                 ))}
               </div>
